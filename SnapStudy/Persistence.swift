@@ -1,9 +1,5 @@
 //
 //  Persistence.swift
-//  SnapStudy
-//
-//  Created by sunghwan ki on 11/6/24.
-//
 
 import CoreData
 
@@ -14,15 +10,23 @@ struct PersistenceController {
     static let preview: PersistenceController = {
         let result = PersistenceController(inMemory: true)
         let viewContext = result.container.viewContext
-        for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
+        
+        // 미리보기용 샘플 데이터 생성
+        for _ in 0..<3 {
+            let newQuestion = QuestionEntity(context: viewContext)
+            newQuestion.id = UUID()
+            newQuestion.type = QuestionType.multipleChoice.rawValue
+            newQuestion.difficulty = Difficulty.medium.rawValue
+            newQuestion.category = "Sample"
+            newQuestion.questionText = "샘플 문제"
+            newQuestion.options = ["보기1", "보기2", "보기3", "보기4"] as NSArray
+            newQuestion.correctAnswerIndex = 0
+            newQuestion.points = 10
         }
+        
         do {
             try viewContext.save()
         } catch {
-            // Replace this implementation with code to handle the error appropriately.
-            // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
             let nsError = error as NSError
             fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
         }
@@ -38,9 +42,6 @@ struct PersistenceController {
         }
         container.loadPersistentStores(completionHandler: { (storeDescription, error) in
             if let error = error as NSError? {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-
                 /*
                  Typical reasons for an error here include:
                  * The parent directory does not exist, cannot be created, or disallows writing.

@@ -8,15 +8,12 @@ struct ContentView: View {
     
     var body: some View {
         TabView {
-            ImageSelectionView()  // 추가
-               .tabItem {
-                   Label("촬영", systemImage: "camera.fill")
-               }
-            
-            QuestionView()
-                .tabItem {
-                    Label("학습", systemImage: "book.fill")
-                }
+            NavigationView {
+                QuestionView()
+            }
+            .tabItem {
+                Label("학습", systemImage: "book.fill")
+            }
             
             StatsView()
                 .tabItem {

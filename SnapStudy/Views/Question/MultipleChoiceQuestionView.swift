@@ -9,27 +9,25 @@ struct MultipleChoiceQuestionView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if let imageData = question.imageData,
-               let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFit()
-            }
-            
             Text(question.questionText)
                 .font(.title2)
                 .padding(.bottom)
             
             ForEach(0..<question.options.count, id: \.self) { index in
                 Button(action: {
-                    let isCorrect = viewModel.checkAnswer(answer: index)
-                    viewModel.showFeedback = true
+                    viewModel.checkAnswer(answer: index)
                 }) {
-                    Text(question.options[index])
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(10)
+                    HStack {
+                        Text(question.options[index])
+                        Spacer()
+                        if viewModel.showFeedback {
+                            Image(systemName: index == question.correctAnswerIndex ? "checkmark.circle.fill" : "x.circle.fill")
+                                .foregroundColor(index == question.correctAnswerIndex ? .green : .red)
+                        }
+                    }
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(10)
                 }
                 .disabled(viewModel.showFeedback)
             }

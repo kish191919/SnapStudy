@@ -1,5 +1,5 @@
 
-//  Models/FillInBlankQuestion.swift
+// Models/FillInBlankQuestion.swift
 import Foundation
 
 // 빈칸 채우기 문제

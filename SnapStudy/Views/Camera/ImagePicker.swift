@@ -1,23 +1,21 @@
 
-//  Views/Camera/ImagePicker.swift
+// Views/Camera/ImagePicker.swift
 import SwiftUI
 
 struct ImagePicker: UIViewControllerRepresentable {
     @Environment(\.presentationMode) private var presentationMode
     @Binding var selectedImage: UIImage?
-    var sourceType: UIImagePickerController.SourceType
+    let sourceType: UIImagePickerController.SourceType
     
     func makeUIViewController(context: UIViewControllerRepresentableContext<ImagePicker>) -> UIImagePickerController {
         let imagePicker = UIImagePickerController()
-        imagePicker.navigationBar.tintColor = .black
-        imagePicker.delegate = context.coordinator
+        print("ImagePicker sourceType: \(sourceType.rawValue)")
         imagePicker.sourceType = sourceType
+        imagePicker.delegate = context.coordinator
         return imagePicker
     }
     
-    func updateUIViewController(_ uiViewController: UIImagePickerController,
-                              context: UIViewControllerRepresentableContext<ImagePicker>) {
-    }
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: UIViewControllerRepresentableContext<ImagePicker>) {}
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -35,6 +33,10 @@ struct ImagePicker: UIViewControllerRepresentable {
             if let image = info[UIImagePickerController.InfoKey.originalImage] as? UIImage {
                 parent.selectedImage = image
             }
+            parent.presentationMode.wrappedValue.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.presentationMode.wrappedValue.dismiss()
         }
     }

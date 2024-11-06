@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9810E9212CDBE22E0042C1FA /* APIKeys.plist in Resources */ = {isa = PBXBuildFile; fileRef = 9810E9202CDBE22E0042C1FA /* APIKeys.plist */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		9810E8C62CDBD5D90042C1FA /* SnapStudy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SnapStudy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9810E9202CDBE22E0042C1FA /* APIKeys.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = APIKeys.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -32,6 +37,7 @@
 		9810E8BD2CDBD5D90042C1FA = {
 			isa = PBXGroup;
 			children = (
+				9810E9202CDBE22E0042C1FA /* APIKeys.plist */,
 				9810E8C82CDBD5D90042C1FA /* SnapStudy */,
 				9810E8C72CDBD5D90042C1FA /* Products */,
 			);
@@ -109,6 +115,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9810E9212CDBE22E0042C1FA /* APIKeys.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

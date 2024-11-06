@@ -2,14 +2,13 @@
 //  Views/Camera/ImageSelectionView.swift
 import SwiftUI
 
-// 이미지 선택 뷰 예시
 struct ImageSelectionView: View {
     @State private var selectedImage: UIImage?
     @State private var isShowingImagePicker = false
     @State private var sourceType: UIImagePickerController.SourceType = .camera
     
     var body: some View {
-        VStack {
+        VStack(spacing: 20) {
             if let image = selectedImage {
                 Image(uiImage: image)
                     .resizable()
@@ -22,7 +21,7 @@ struct ImageSelectionView: View {
                     sourceType = .camera
                     isShowingImagePicker = true
                 }) {
-                    Label("카메라", systemImage: "camera")
+                    Label("카메라로 촬영", systemImage: "camera")
                         .padding()
                         .background(Color.blue)
                         .foregroundColor(.white)
@@ -33,7 +32,7 @@ struct ImageSelectionView: View {
                     sourceType = .photoLibrary
                     isShowingImagePicker = true
                 }) {
-                    Label("갤러리", systemImage: "photo")
+                    Label("갤러리에서 선택", systemImage: "photo")
                         .padding()
                         .background(Color.green)
                         .foregroundColor(.white)

@@ -1,5 +1,5 @@
 
-//  Models/GameStats.swift
+// Models/GameStats.swift
 import Foundation
 
 // 게임 통계
