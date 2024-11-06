@@ -1,6 +1,6 @@
 
 //  Models/ClaudeAPIService.swift
-//  14.86 - 14.80 - 14.73    14.57 - 14.42
+//  14.86 - 14.80 - 14.73    14.57 - 14.42 (0.15) -14.07(0.35)  //  13.70 - 13.61 - 13.53 // 
 import SwiftUI
 import Foundation
 
@@ -9,10 +9,19 @@ import Foundation
 
 class ClaudeAPIService {
     static let shared = ClaudeAPIService()
-    private let baseURL = "https://api.anthropic.com/v1/messages"
-    private let maxImageSize = 3 * 1024 * 1024 // base64 인코딩 후 크기 증가를 고려하여 3MB로 제한
-    
-    private init() {}
+        private let baseURL = "https://api.anthropic.com/v1/messages"
+        private let maxImageSize = 3 * 1024 * 1024
+        private let session: URLSession
+        private let maxRetries = 3
+        
+        private init() {
+            // URLSession 설정
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = 60  // 60초
+            configuration.timeoutIntervalForResource = 300 // 5분
+            configuration.waitsForConnectivity = true     // 연결이 불안정할 때 기다림
+            self.session = URLSession(configuration: configuration)
+        }
     
     private func compressImage(_ image: UIImage) -> Data? {
         // 초기 압축 품질
@@ -58,114 +67,152 @@ class ClaudeAPIService {
         return imageData
     }
     
-    private func generateQuestions(from image: UIImage) async throws -> [Question] {
-        guard let apiKey = APIKeyManager.shared.getClaudeAPIKey() else {
-            throw APIError.missingAPIKey
+    func generateQuestions(from image: UIImage) async throws -> [Question] {
+            var attemptCount = 0
+            let maxAttempts = 3
+            
+            while attemptCount < maxAttempts {
+                do {
+                    return try await generateQuestionsInternal(from: image)
+                } catch let error as NSError {
+                    attemptCount += 1
+                    print("Attempt \(attemptCount) failed: \(error.localizedDescription)")
+                    
+                    if attemptCount == maxAttempts {
+                        throw error
+                    }
+                    
+                    // 재시도 전 지수 백오프 대기
+                    let delay = pow(2.0, Double(attemptCount)) // 2, 4, 8초...
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+            
+            throw APIError.networkError(NSError(domain: "APIError", code: -1,
+                                              userInfo: [NSLocalizedDescriptionKey: "최대 재시도 횟수를 초과했습니다."]))
         }
         
-        guard let imageData = compressImage(image) else {
-            throw APIError.invalidData
-        }
-        
-        let base64Image = imageData.base64EncodedString()
-        let base64Size = Double(base64Image.count) / 1024 / 1024
-        
-        guard base64Size <= 5.0 else {
-            print("Image still too large after compression: \(base64Size) MB")
-            throw APIError.invalidData
-        }
-        
-        var request = URLRequest(url: URL(string: baseURL)!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        
-        let requestBody: [String: Any] = [
-            "model": "claude-3-opus-20240229",
-            "max_tokens": 4000,
-            "messages": [
-                [
-                    "role": "user",
-                    "content": [
-                        [
-                            "type": "image",
-                            "source": [
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": base64Image
+        private func generateQuestionsInternal(from image: UIImage) async throws -> [Question] {
+            guard let apiKey = APIKeyManager.shared.getClaudeAPIKey() else {
+                throw APIError.missingAPIKey
+            }
+            
+            // 이미지 압축
+            guard let imageData = compressImage(image) else {
+                throw APIError.invalidData
+            }
+            
+            let base64Image = imageData.base64EncodedString()
+            let base64Size = Double(base64Image.count) / 1024 / 1024
+            
+            guard base64Size <= 5.0 else {
+                throw APIError.imageTooLarge
+            }
+            
+            print("Image size: \(base64Size) MB")
+            
+            var request = URLRequest(url: URL(string: baseURL)!)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+            request.timeoutInterval = 60 // 요청별 타임아웃 설정
+            
+            let promptText = """
+            Based on the image content, please create the following types of questions.
+            Each question must be in exact JSON format:
+
+            1. Multiple Choice (4 questions):
+            {
+             "questionType": "multipleChoice",
+             "questionText": "Write your question here",
+             "options": ["option1", "option2", "option3", "option4"],
+             "correctAnswer": 0,
+             "difficulty": "medium"
+            }
+
+            2. Fill in the Blank (4 questions):
+            {
+             "questionType": "fill-in-the-blank",
+             "questionText": "Write the sentence with a _____ for the blank",
+             "correctAnswer": "answer",
+             "difficulty": "medium"
+            }
+
+            3. Matching (2 questions):
+            Please follow this format exactly:
+            {
+             "questionType": "matching",
+             "questionText": "Match the following words with their correct meanings",
+             "matching": [
+               {"word": "word1", "synonym": "meaning1"},
+               {"word": "word2", "synonym": "meaning2"},
+               {"word": "word3", "synonym": "meaning3"},
+               {"word": "word4", "synonym": "meaning4"}
+             ],
+             "difficulty": "medium"
+            }
+
+            Important notes:
+            - All JSON must be complete and properly formatted
+            - Use double quotes (") for strings
+            - Do not include commas after the last item in arrays
+            - Each matching question must include exactly 4 word-meaning pairs
+            - Keep each meaning/synonym concise (maximum 5 words)
+            - Difficulties should be "easy", "medium", or "hard"
+            - Make questions that test understanding, not just memorization
+            - Each question should be relevant to the image content
+
+            Please ensure each question follows the exact structure shown above.
+            """
+            
+            let requestBody: [String: Any] = [
+                "model": "claude-3-opus-20240229",
+                "max_tokens": 4000,
+                "messages": [
+                    [
+                        "role": "user",
+                        "content": [
+                            [
+                                "type": "image",
+                                "source": [
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": base64Image
+                                ]
+                            ],
+                            [
+                                "type": "text",
+                                "text": promptText
                             ]
-                        ],
-                        [
-                            "type": "text",
-                            "text": """
-                            이 이미지의 내용을 바탕으로 다양한 유형의 문제를 만들어주세요:
-                            1. 4지선다형 문제 8개
-                            2. 빈칸 채우기 문제 8개
-                            3. 매칭 문제 4개
-                            
-                            각 문제의 난이도를 easy, medium, hard로 적절히 분배해주세요.
-                            문제는 단순 암기가 아닌 이해와 분석이 필요한 형태로 만들어주세요.
-                            
-                            각 문제는 아래 JSON 형식으로 제공해주세요:
-
-                            4지선다형:
-                            {
-                              "questionType": "multipleChoice",
-                              "questionText": "문제 내용",
-                              "options": ["보기1", "보기2", "보기3", "보기4"],
-                              "correctAnswer": 0,
-                              "difficulty": "medium"
-                            }
-
-                            빈칸 채우기:
-                            {
-                              "questionType": "fill-in-the-blank",
-                              "questionText": "문제 내용 _____ 빈칸이 있는 문장",
-                              "correctAnswer": "정답",
-                              "difficulty": "medium"
-                            }
-
-                            매칭:
-                            {
-                              "questionType": "matching",
-                              "questionText": "매칭 지시문",
-                              "matching": [
-                                {"word": "단어1", "synonym": "매칭1"},
-                                {"word": "단어2", "synonym": "매칭2"},
-                                {"word": "단어3", "synonym": "매칭3"},
-                                {"word": "단어4", "synonym": "매칭4"}
-                              ],
-                              "difficulty": "medium"
-                            }
-                            """
                         ]
                     ]
                 ]
             ]
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-        
-        if httpResponse.statusCode != 200 {
-            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorInfo = errorJson["error"] as? [String: Any],
-               let errorMessage = errorInfo["message"] as? String {
-                print("API Error: \(errorMessage)")
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+            
+            do {
+                let (data, response) = try await session.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw APIError.invalidResponse
+                }
+                
+                if httpResponse.statusCode != 200 {
+                    print("HTTP Status Code: \(httpResponse.statusCode)")
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("Response: \(responseString)")
+                    }
+                    throw APIError.invalidResponse
+                }
+                
+                return try parseQuestionsFromResponse(data)
+            } catch {
+                print("Network error: \(error.localizedDescription)")
+                throw APIError.networkError(error)
             }
-            print("Status Code: \(httpResponse.statusCode)")
-            print("Raw Response: \(String(data: data, encoding: .utf8) ?? "")")
-            throw APIError.invalidResponse
         }
-        
-        return try parseQuestionsFromResponse(data)
-    }
     
     func generateQuestionsProgressively(from image: UIImage) -> AsyncThrowingStream<Question, Error> {
         AsyncThrowingStream { continuation in
@@ -190,114 +237,191 @@ class ClaudeAPIService {
     }
     
     private func parseQuestionsFromResponse(_ data: Data) throws -> [Question] {
-        do {
-            let decoder = JSONDecoder()
-            let response = try decoder.decode(ClaudeResponse.self, from: data)
-            
-            guard let contentText = response.content.first?.text else {
-                throw APIError.noContent
-            }
-            
-            var questions: [Question] = []
-            
-            // 각 JSON 객체를 찾아서 파싱
-            let pattern = "\\{[^\\{\\}]*\\}"
-            let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
-            let matches = regex.matches(in: contentText, range: NSRange(contentText.startIndex..., in: contentText))
-            
-            for match in matches {
-                guard let range = Range(match.range, in: contentText),
-                      let jsonData = String(contentText[range]).data(using: .utf8),
-                      let questionDict = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-                    continue
-                }
+        let decoder = JSONDecoder()
+        let response = try decoder.decode(ClaudeResponse.self, from: data)
+        
+        guard let contentText = response.content.first?.text else {
+            throw APIError.noContent
+        }
+        
+        print("\nRaw API Response:", contentText) // 전체 응답 확인용
+        
+        var questions: [Question] = []
+        
+        // 정규식 패턴 수정
+        let pattern = "\\{\\s*\"questionType\"[^{]*\"matching\"\\s*:\\s*\\[[^\\]]*\\]\\s*,\\s*\"difficulty\"\\s*:\\s*\"[^\"]*\"\\s*\\}|\\{\\s*\"questionType\"[^}]*\\}"
+        let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
+        let matches = regex.matches(in: contentText, range: NSRange(contentText.startIndex..., in: contentText))
+        
+        print("\nFound \(matches.count) potential question objects")
+        
+        for (index, match) in matches.enumerated() {
+            if let range = Range(match.range, in: contentText) {
+                let jsonString = String(contentText[range])
+                    .replacingOccurrences(of: "\n", with: "")
+                    .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 
-                if let type = questionDict["questionType"] as? String {
+                print("\nProcessing question #\(index + 1):")
+                print(jsonString)
+                
+                do {
+                    guard let jsonData = jsonString.data(using: .utf8) else {
+                        print("Failed to convert string to data")
+                        continue
+                    }
+                    
+                    guard let questionDict = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+                        print("Failed to parse JSON")
+                        continue
+                    }
+                    
+                    guard let type = questionDict["questionType"] as? String else {
+                        print("Missing questionType")
+                        continue
+                    }
+                    
+                    let question: Question?
                     switch type {
                     case "multipleChoice":
-                        if let question = try createMultipleChoiceQuestion(from: questionDict) {
-                            questions.append(question)
-                        }
+                        question = try createMultipleChoiceQuestion(from: questionDict)
                     case "fill-in-the-blank":
-                        if let question = try createFillInBlankQuestion(from: questionDict) {
-                            questions.append(question)
-                        }
+                        question = try createFillInBlankQuestion(from: questionDict)
                     case "matching":
-                        if let question = try createMatchingQuestion(from: questionDict) {
-                            questions.append(question)
-                        }
+                        print("\nProcessing matching question:")
+                        print(questionDict)
+                        question = try createMatchingQuestion(from: questionDict)
                     default:
-                        print("Unknown question type: \(type)")
+                        print("Unknown question type:", type)
+                        continue
                     }
+                    
+                    if let question = question {
+                        questions.append(question)
+                        print("Successfully created \(type) question")
+                    }
+                } catch {
+                    print("Error processing question:", error)
+                    print("JSON string:", jsonString)
                 }
             }
-            
-            print("Successfully parsed \(questions.count) questions")
-            return questions
-            
-        } catch {
-            print("Parsing error: \(error)")
-            throw APIError.decodingError(error)
         }
+        
+        // 문제 유형별 통계 출력
+        print("\nFinal question counts:")
+        print("Multiple Choice:", questions.filter { $0 is MultipleChoiceQuestion }.count)
+        print("Fill in Blank:", questions.filter { $0 is FillInBlankQuestion }.count)
+        print("Matching:", questions.filter { $0 is MatchingQuestion }.count)
+        
+        if questions.isEmpty {
+            throw APIError.noContent
+        }
+        
+        return questions
     }
-    
+
     private func createMultipleChoiceQuestion(from dict: [String: Any]) throws -> MultipleChoiceQuestion? {
-        guard let questionText = dict["questionText"] as? String,
-              let options = dict["options"] as? [String],
-              let correctAnswer = dict["correctAnswer"] as? Int,
-              let difficultyString = dict["difficulty"] as? String,
-              let difficulty = Difficulty(rawValue: difficultyString) else {
+        do {
+            guard let questionText = dict["questionText"] as? String,
+                  let options = dict["options"] as? [String],
+                  let correctAnswer = dict["correctAnswer"] as? Int,
+                  let difficultyString = dict["difficulty"] as? String else {
+                print("Invalid multiple choice question data:", dict)
+                throw APIError.invalidFormat
+            }
+            
+            guard let difficulty = Difficulty(rawValue: difficultyString.lowercased()),
+                  options.count == 4 else {
+                print("Invalid difficulty or options count:", dict)
+                throw APIError.invalidFormat
+            }
+            
+            return MultipleChoiceQuestion(
+                difficulty: difficulty,
+                category: "General",
+                imageData: nil,
+                questionText: questionText,
+                options: options,
+                correctAnswerIndex: correctAnswer,
+                points: 10
+            )
+        } catch {
+            print("Error creating multiple choice question:", error)
             return nil
         }
-        
-        return MultipleChoiceQuestion(
-            difficulty: difficulty,
-            category: "General",
-            imageData: nil,
-            questionText: questionText,
-            options: options,
-            correctAnswerIndex: correctAnswer,
-            points: 10
-        )
     }
-    
+
     private func createFillInBlankQuestion(from dict: [String: Any]) throws -> FillInBlankQuestion? {
-        guard let questionText = dict["questionText"] as? String,
-              let correctAnswer = dict["correctAnswer"] as? String,
-              let difficultyString = dict["difficulty"] as? String,
-              let difficulty = Difficulty(rawValue: difficultyString) else {
+        do {
+            guard let questionText = dict["questionText"] as? String,
+                  let correctAnswer = dict["correctAnswer"] as? String,
+                  let difficultyString = dict["difficulty"] as? String else {
+                print("Invalid fill in blank question data:", dict)
+                throw APIError.invalidFormat
+            }
+            
+            guard let difficulty = Difficulty(rawValue: difficultyString.lowercased()) else {
+                print("Invalid difficulty:", difficultyString)
+                throw APIError.invalidFormat
+            }
+            
+            return FillInBlankQuestion(
+                difficulty: difficulty,
+                category: "Vocabulary",
+                imageData: nil,
+                questionText: questionText,
+                correctAnswer: correctAnswer,
+                similarAcceptableAnswers: [],
+                points: 10
+            )
+        } catch {
+            print("Error creating fill in blank question:", error)
             return nil
         }
-        
-        return FillInBlankQuestion(
-            difficulty: difficulty,
-            category: "Vocabulary",
-            imageData: nil,
-            questionText: questionText,
-            correctAnswer: correctAnswer,
-            similarAcceptableAnswers: [],
-            points: 10
-        )
     }
-    
+
     private func createMatchingQuestion(from dict: [String: Any]) throws -> MatchingQuestion? {
-        guard let questionText = dict["questionText"] as? String,
-              let matching = dict["matching"] as? [[String: String]],
-              let difficultyString = dict["difficulty"] as? String,
-              let difficulty = Difficulty(rawValue: difficultyString) else {
-            return nil
+        print("\nCreating matching question from dict:", dict)
+        
+        guard let questionText = dict["questionText"] as? String else {
+            print("Missing questionText")
+            throw APIError.invalidFormat
+        }
+        
+        guard let matching = dict["matching"] as? [[String: String]] else {
+            print("Missing or invalid matching array")
+            throw APIError.invalidFormat
+        }
+        
+        guard let difficultyString = dict["difficulty"] as? String else {
+            print("Missing difficulty")
+            throw APIError.invalidFormat
+        }
+        
+        guard let difficulty = Difficulty(rawValue: difficultyString.lowercased()) else {
+            print("Invalid difficulty value:", difficultyString)
+            throw APIError.invalidFormat
         }
         
         var leftItems: [String] = []
         var rightItems: [String] = []
-        var correctPairs: [(Int, Int)] = []
         
-        for (index, pair) in matching.enumerated() {
-            if let word = pair["word"], let match = pair["synonym"] ?? pair["antonym"] {
-                leftItems.append(word)
-                rightItems.append(match)
-                correctPairs.append((index, index))
+        print("Processing matching pairs:", matching)
+        
+        for (_, pair) in matching.enumerated() {
+            guard let word = pair["word"],
+                  let match = pair["synonym"] else {
+                print("Invalid pair:", pair)
+                continue
             }
+            
+            leftItems.append(word)
+            rightItems.append(match)
+        }
+        
+        guard !leftItems.isEmpty && leftItems.count == rightItems.count else {
+            print("Empty or mismatched items. Left:", leftItems.count, "Right:", rightItems.count)
+            throw APIError.invalidFormat
         }
         
         return MatchingQuestion(
@@ -307,7 +431,6 @@ class ClaudeAPIService {
             questionText: questionText,
             leftItems: leftItems,
             rightItems: rightItems,
-            correctPairs: correctPairs,
             points: 10
         )
     }

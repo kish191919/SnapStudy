@@ -97,22 +97,21 @@ class StorageManager {
                     )
                     
                     // StorageManager.swift의 loadQuestions() 메서드 내부
-                    case .matching:
-                        guard let correctPairsData = entity.correctPairsData,
-                              let codablePairs = try? JSONDecoder().decode([CodablePair].self, from: correctPairsData) else {
-                            return nil
-                        }
-                        
-                        return MatchingQuestion(
-                            difficulty: difficulty,
-                            category: entity.category ?? "",
-                            imageData: entity.imageData,
-                            questionText: entity.questionText ?? "다음 항목들을 올바르게 매칭하세요:", // 기본값 추가
-                            leftItems: (entity.leftItems as? [String]) ?? [],
-                            rightItems: (entity.rightItems as? [String]) ?? [],
-                            correctPairs: codablePairs.map { $0.tuple },
-                            points: Int(entity.points)
-                        )
+                case .matching:
+                    guard let correctPairsData = entity.correctPairsData,
+                          let codablePairs = try? JSONDecoder().decode([CodablePair].self, from: correctPairsData) else {
+                        return nil
+                    }
+                    
+                    return MatchingQuestion(
+                        difficulty: difficulty,
+                        category: entity.category ?? "",
+                        imageData: entity.imageData,
+                        questionText: entity.questionText ?? "다음 항목들을 올바르게 매칭하세요:",
+                        leftItems: (entity.leftItems as? [String]) ?? [],
+                        rightItems: (entity.rightItems as? [String]) ?? [],
+                        points: Int(entity.points)
+                    )
                 }
             }
         } catch {
