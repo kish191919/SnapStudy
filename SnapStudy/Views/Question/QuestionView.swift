@@ -3,91 +3,114 @@
 import SwiftUI
 import PhotosUI
 
+
 struct QuestionView: View {
+    let question: Question
     @EnvironmentObject var viewModel: QuestionViewModel
-    @State private var selectedImage: UIImage?
-    @State private var isShowingCamera = false
-    @State private var isShowingPhotoLibrary = false
-    
-    private func questionContent(for question: Question) -> some View {
-            VStack {
-                switch question {
-                case let q as MultipleChoiceQuestion:
-                    MultipleChoiceQuestionView(question: q)
-                case let q as FillInBlankQuestion:
-                    FillInBlankQuestionView(question: q)
-                case let q as MatchingQuestion:
-                    MatchingQuestionView(question: q)
-                default:
-                    Text("지원하지 않는 문제 유형입니다.")
-                }
-            }
-            .animation(.default, value: viewModel.currentIndex)
-        }
     
     var body: some View {
-        ZStack {
-            VStack {
-                if !viewModel.questions.isEmpty {
-                    // 진행 상황 표시
-                    ProgressBar(
-                        current: viewModel.currentIndex + 1,
-                        total: viewModel.questions.count,
-                        loadedCount: viewModel.loadedQuestionsCount
-                    )
-                    .padding()
-                    
-                    if let question = viewModel.currentQuestion {
-                        questionContent(for: question)
-                            .padding()
-                            .transition(.slide)
-                        
-                        if viewModel.showFeedback {
-                            FeedbackView(isCorrect: viewModel.isCorrect) {
-                                withAnimation {
-                                    viewModel.nextQuestion()
-                                }
-                            }
-                            .transition(.scale)
-                        }
-                    }
-                } else {
-                    // 이미지 선택 버튼들
-                    ImageSelectionButtons(
-                        isShowingCamera: $isShowingCamera,
-                        isShowingPhotoLibrary: $isShowingPhotoLibrary
-                    )
-                    .padding()
-                }
-            }
-            
-            // 로딩 상태 표시
-            if case .loading = viewModel.loadingState {
-                LoadingOverlay(
-                    loadedCount: viewModel.loadedQuestionsCount
-                )
-            }
-            
-            // 에러 표시
-            if case .error(let message) = viewModel.loadingState {
-                ErrorView(message: message) {
-                    viewModel.loadingState = .idle
-                }
-            }
-        }
-        .sheet(isPresented: $isShowingCamera) {
-            ImagePicker(selectedImage: $selectedImage, sourceType: .camera)
-        }
-        .sheet(isPresented: $isShowingPhotoLibrary) {
-            ImagePicker(selectedImage: $selectedImage, sourceType: .photoLibrary)
-        }
-        .onChange(of: selectedImage) { _, newImage in
-            if let image = newImage {
-                viewModel.loadQuestions(from: image)
+        VStack {
+            switch question {
+            case let q as MultipleChoiceQuestion:
+                MultipleChoiceQuestionView(question: q)
+            case let q as FillInBlankQuestion:
+                FillInBlankQuestionView(question: q)
+            case let q as MatchingQuestion:
+                MatchingQuestionView(question: q)
+            default:
+                Text("지원하지 않는 문제 유형입니다.")
             }
         }
     }
 }
+
+
+//struct QuestionView: View {
+//    @EnvironmentObject var viewModel: QuestionViewModel
+//    @State private var selectedImage: UIImage?
+//    @State private var isShowingCamera = false
+//    @State private var isShowingPhotoLibrary = false
+//    
+//    private func questionContent(for question: Question) -> some View {
+//            VStack {
+//                switch question {
+//                case let q as MultipleChoiceQuestion:
+//                    MultipleChoiceQuestionView(question: q)
+//                case let q as FillInBlankQuestion:
+//                    FillInBlankQuestionView(question: q)
+//                case let q as MatchingQuestion:
+//                    MatchingQuestionView(question: q)
+//                default:
+//                    Text("지원하지 않는 문제 유형입니다.")
+//                }
+//            }
+//            .animation(.default, value: viewModel.currentIndex)
+//        }
+//    
+//    
+//    var body: some View {
+//        ZStack {
+//            VStack {
+//                if !viewModel.questions.isEmpty {
+//                    // 진행 상황 표시
+//                    ProgressBar(
+//                        current: viewModel.currentIndex + 1,
+//                        total: viewModel.questions.count,
+//                        loadedCount: viewModel.loadedQuestionsCount
+//                    )
+//                    .padding()
+//                    
+//                    if let question = viewModel.currentQuestion {
+//                        questionContent(for: question)
+//                            .padding()
+//                            .transition(.slide)
+//                        
+//                        if viewModel.showFeedback {
+//                            FeedbackView(isCorrect: viewModel.isCorrect) {
+//                                withAnimation {
+//                                    viewModel.nextQuestion()
+//                                }
+//                            }
+//                            .transition(.scale)
+//                        }
+//                    }
+//                } else {
+//                    // 이미지 선택 버튼들
+//                    ImageSelectionButtons(
+//                        isShowingCamera: $isShowingCamera,
+//                        isShowingPhotoLibrary: $isShowingPhotoLibrary
+//                    )
+//                    .padding()
+//                }
+//            }
+//            
+//            // 로딩 상태 표시
+//            if case .loading = viewModel.loadingState {
+//                LoadingOverlay(
+//                    loadedCount: viewModel.loadedQuestionsCount
+//                )
+//            }
+//            
+//            // 에러 표시
+//            if case .error(let message) = viewModel.loadingState {
+//                ErrorView(message: message) {
+//                    viewModel.loadingState = .idle
+//                }
+//            }
+//        }
+//        .sheet(isPresented: $isShowingCamera) {
+//            ImagePicker(selectedImage: $selectedImage, sourceType: .camera)
+//        }
+//        .sheet(isPresented: $isShowingPhotoLibrary) {
+//            ImagePicker(selectedImage: $selectedImage, sourceType: .photoLibrary)
+//        }
+//        .onChange(of: selectedImage) { _, newImage in
+//            if let image = newImage {
+//                viewModel.loadQuestions(from: image)
+//            }
+//        }
+//    }
+//}
 
 // 새로운 보조 뷰들
 struct ProgressBar: View {

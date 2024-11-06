@@ -5,25 +5,43 @@ import CoreData
 struct ContentView: View {
     @StateObject private var questionViewModel = QuestionViewModel()
     @StateObject private var userProfileViewModel = UserProfileViewModel()
+    @State private var selectedTab = 0
     
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             NavigationView {
                 QuestionView()
             }
             .tabItem {
                 Label("학습", systemImage: "book.fill")
             }
+            .tag(0)
             
-            StatsView()
-                .tabItem {
-                    Label("통계", systemImage: "chart.bar.fill")
-                }
+            NavigationView {
+                StatsView()
+            }
+            .tabItem {
+                Label("통계", systemImage: "chart.bar.fill")
+            }
+            .tag(1)
             
-            ProfileView()
-                .tabItem {
-                    Label("프로필", systemImage: "person.fill")
-                }
+            NavigationView {
+                LearningHistoryView()
+            }
+            .tabItem {
+                Label("학습 기록", systemImage: "clock.fill")
+            }
+            .tag(2)
+        }
+        .onChange(of: questionViewModel.isCompleted) { completed in
+            if completed {
+                selectedTab = 1 // 통계 탭으로 자동 이동
+                userProfileViewModel.updateStats(
+                    score: questionViewModel.score,
+                    totalQuestions: questionViewModel.questions.count,
+                    correctAnswers: questionViewModel.correctAnswersCount
+                )
+            }
         }
         .environmentObject(questionViewModel)
         .environmentObject(userProfileViewModel)

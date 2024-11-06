@@ -14,7 +14,7 @@ enum Difficulty: String, Codable {
     case hard = "hard"
 }
 
-protocol Question {
+protocol Question: Codable {
     var id: UUID { get }
     var type: QuestionType { get }
     var difficulty: Difficulty { get }
@@ -22,3 +22,5 @@ protocol Question {
     var imageData: Data? { get }
     var points: Int { get }
 }
+
+

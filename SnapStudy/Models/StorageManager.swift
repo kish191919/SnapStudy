@@ -17,6 +17,55 @@ class StorageManager {
         }
     }
     
+    func loadQuestionSets() -> [QuestionSet] {
+        let context = container.viewContext
+        let fetchRequest: NSFetchRequest<QuestionSetEntity> = QuestionSetEntity.fetchRequest()
+        
+        do {
+            let entities = try context.fetch(fetchRequest)
+            return entities.compactMap { entity in
+                guard let id = entity.id,
+                      let date = entity.date,
+                      let questionsData = entity.questionsData,
+                      let anyQuestions = try? JSONDecoder().decode([AnyQuestion].self, from: questionsData) else {
+                    return nil
+                }
+                
+                // AnyQuestion 배열을 Question 배열로 변환
+                let questions = anyQuestions.map { $0.base }
+                
+                return QuestionSet(
+                    id: id,
+                    date: date,
+                    questions: questions,
+                    score: Int(entity.score),
+                    totalQuestions: Int(entity.totalQuestions)
+                )
+            }
+        } catch {
+            print("Error loading question sets: \(error)")
+            return []
+        }
+    }
+
+    // QuestionSet을 저장할 때도 AnyQuestion을 사용하도록 수정
+    func saveQuestionSet(_ questionSet: QuestionSet) {
+        let context = container.viewContext
+        let entity = QuestionSetEntity(context: context)
+        entity.id = questionSet.id
+        entity.date = questionSet.date
+        entity.score = Int16(questionSet.score)
+        entity.totalQuestions = Int16(questionSet.totalQuestions)
+        
+        // Question을 AnyQuestion으로 래핑하여 인코딩
+        let anyQuestions = questionSet.questions.map { AnyQuestion($0) }
+        if let questionsData = try? JSONEncoder().encode(anyQuestions) {
+            entity.questionsData = questionsData
+        }
+        
+        try? context.save()
+    }
+    
     // 문제 저장
     func saveQuestion(_ question: Question) {
         let context = container.viewContext

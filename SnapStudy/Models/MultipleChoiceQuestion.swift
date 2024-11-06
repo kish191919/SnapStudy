@@ -2,7 +2,7 @@
 import Foundation
 
 // 4지선다 문제
-struct MultipleChoiceQuestion: Question, Identifiable {
+struct MultipleChoiceQuestion: Question, Identifiable, Codable {
     let id: UUID = UUID()
     let type: QuestionType = .multipleChoice
     let difficulty: Difficulty
@@ -14,4 +14,8 @@ struct MultipleChoiceQuestion: Question, Identifiable {
     let points: Int
     
     var isAnsweredCorrectly: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, type, difficulty, category, imageData, questionText, options, correctAnswerIndex, points
+    }
 }

@@ -3,7 +3,7 @@
 import Foundation
 
 // 빈칸 채우기 문제
-struct FillInBlankQuestion: Question, Identifiable {
+struct FillInBlankQuestion: Question, Identifiable, Codable {
     let id: UUID = UUID()
     let type: QuestionType = .fillInBlank
     let difficulty: Difficulty
@@ -15,4 +15,8 @@ struct FillInBlankQuestion: Question, Identifiable {
     let points: Int
     
     var userAnswer: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, type, difficulty, category, imageData, questionText, correctAnswer, similarAcceptableAnswers, points
+    }
 }
